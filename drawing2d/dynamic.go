@@ -36,11 +36,12 @@ func drawDynamicSetup() func(win *pixelgl.Window) {
 			dynamic.Circle(10, 0)
 		}
 
-		// update window and wait
+		// send dynamic contents to the window
 		dynamic.Draw(win)
-		win.Update()
-		for j := 0; j < 1000000; j++ {
-		}
+
+		// clear useless shapes
+		dynamic.Clear()
+		dynamic.Reset()
 
 		// erase sun
 		if sunX <= WIDTH+100 {
@@ -67,6 +68,5 @@ func drawDynamicSetup() func(win *pixelgl.Window) {
 				smokeY = HEIGHT/4 + 210
 			}
 		}
-
 	}
 }
