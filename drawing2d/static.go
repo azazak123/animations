@@ -14,6 +14,7 @@ var SUN color.Color = pixel.RGB(0.92, 0.84, 0.1)
 var HOUSE color.Color = pixel.RGB(0.7, 0.5, 0.5)
 var ROOF color.Color = pixel.RGB(0.7, 0.5, 0.6)
 
+// draw all static contents
 func drawStatic(win *pixelgl.Window) {
 	win.Clear(BACKGROUND)
 

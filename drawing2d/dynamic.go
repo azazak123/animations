@@ -13,31 +13,36 @@ const MAXIMUM_Y = HEIGHT - 50
 const COEFFICIENT = 0.001
 
 func drawDynamicSetup() func(win *pixelgl.Window) {
+	// set dynamic variables
 	sunX := -100
 	smokeY := HEIGHT/4 + 210
 	dynamic := imdraw.New(nil)
 
 	return func(win *pixelgl.Window) {
+		// calculate sun coordunates
 		cord := pixel.V(float64(sunX), MAXIMUM_Y-COEFFICIENT*math.Pow(math.Abs(float64(sunX-WIDTH/2)), 2))
 
+		// draw sun
 		if sunX <= WIDTH+100 {
 			dynamic.Color = SUN
 			dynamic.Push(cord)
 			dynamic.Circle(50, 0)
 		}
 
+		// draw smoke
 		if smokeY <= HEIGHT/4+310 {
 			dynamic.Color = pixel.RGBA{R: 0, G: 0, B: 0, A: float64(HEIGHT/4+310-smokeY) / 100.0}
 			dynamic.Push(pixel.V(WIDTH/2-40.0, float64(smokeY)))
 			dynamic.Circle(10, 0)
 		}
 
+		// update window and wait
 		dynamic.Draw(win)
 		win.Update()
-
 		for j := 0; j < 1000000; j++ {
 		}
 
+		// erase sun
 		if sunX <= WIDTH+100 {
 			dynamic.Color = BACKGROUND
 			dynamic.Push(cord)
@@ -50,6 +55,7 @@ func drawDynamicSetup() func(win *pixelgl.Window) {
 			}
 		}
 
+		// erase smoke
 		if smokeY <= HEIGHT/4+310 {
 			dynamic.Color = BACKGROUND
 			dynamic.Push(pixel.V(WIDTH/2-40.0, float64(smokeY)))
