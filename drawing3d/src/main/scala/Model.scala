@@ -8,18 +8,22 @@ import scala.io.Source
 
 object Model {
 
+  //open file chooser dialog
   private def chooseFile(): URI = {
     FileChooserDialog().toURI
   }
 
+  //model constructor
   def apply(colour: Colour = Colour.next()): Model = {
     val fileName = chooseFile()
 
+    // load file
     val source = Source.fromURI(fileName)
     val iterator = source.getLines()
 
     var shapes = new Array[Shape](0)
 
+    // parse file
     iterator foreach {
       string =>
         val param = string.split(" ").drop(1)
@@ -38,12 +42,15 @@ object Model {
           }
         }
     }
+
+    //close file
     source.close()
 
     new Model(shapes, colour)
   }
 }
 
+// implement Shape trait for Model
 case class Model(shapes: Array[Shape], colour: Colour) extends Shape {
   override type Self = Model
 

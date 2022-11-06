@@ -11,20 +11,17 @@ object FileChooserDialog {
     //initialize JavaFX
     new JFXPanel()
 
+    //create task
     val getFile = new FutureTask(new Callable[File]() {
       override def call(): File = new FileChooser().showOpenDialog(new Stage)
     })
 
-    // Create a dialog stage and display it on JavaFX Application Thread
+    // Create a file dialog and display it
     Platform.runLater(getFile)
 
+    // get file and return it
     while (!getFile.isDone) {}
-
-    val file = getFile.get()
-
-    //Platform.exit()
-
-    file
+    getFile.get()
   }
 
 
