@@ -5,8 +5,9 @@ import scalafx.stage.{FileChooser, Stage}
 import java.io.File
 import java.util.concurrent.{Callable, FutureTask}
 
-
+/** Object for creating file-chooser window */
 object FileChooserDialog {
+  /** Open file dialog and return choice file */
   def apply(): File = {
     //initialize JavaFX
     new JFXPanel()
