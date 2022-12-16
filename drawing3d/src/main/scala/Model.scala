@@ -7,6 +7,8 @@ import slack3d.graphics.shape.line.{Line, LineOrRay}
 import spire.std.any.DoubleAlgebra
 
 import java.net.URI
+import java.util.Scanner
+import java.util.regex.Pattern
 import scala.io.Source
 
 object Model {
@@ -17,7 +19,10 @@ object Model {
   }
 
   /** Create model from file */
-  def apply(colour: Colour = Colour.next(), showAxis: Boolean = false): Model = {
+  def apply(
+             colour: Colour = Colour.next(),
+             showAxis: Boolean = false
+           ): Model = {
     val fileName = chooseFile()
 
     // load file
@@ -27,43 +32,73 @@ object Model {
     var shapes = new Array[Shape](0)
 
     // parse file
-    iterator foreach {
-      string =>
-        val param = string.split(" ").drop(1)
-        shapes :+= {
-          string.split(" ")(0) match {
-            case "Sphere" =>
-              Sphere(param(0).toDouble, Vector3(param(1).toDouble, param(2).toDouble, param(3).toDouble), colour)
-            case "Text" =>
-              Text(param(0), Vector3(param(1).toDouble, param(2).toDouble, param(3).toDouble), colour = colour)
-            case "Box" =>
-              Box(param(0).toDouble, param(1).toDouble, param(2).toDouble, colour) +
-                Vector3(param(3).toDouble, param(4).toDouble, param(5).toDouble)
-            case "Cylinder" =>
-              Cylinder(radius = param(0).toDouble, colour = colour)
-                .map(_ + Vector3(param(1).toDouble, param(2).toDouble, param(3).toDouble))
-          }
+    iterator foreach { string =>
+      val param = string.split(" ").drop(1)
+      shapes :+= {
+        string.split(" ")(0) match {
+          case "Sphere" =>
+            Sphere(
+              param(0).toDouble,
+              Vector3(param(1).toDouble, param(2).toDouble, param(3).toDouble),
+              colour
+            )
+          case "Text" =>
+            Text(
+              param(0),
+              Vector3(param(1).toDouble, param(2).toDouble, param(3).toDouble),
+              colour = colour
+            )
+          case "Box" =>
+            Box(
+              param(0).toDouble,
+              param(1).toDouble,
+              param(2).toDouble,
+              colour
+            ) +
+              Vector3(param(3).toDouble, param(4).toDouble, param(5).toDouble)
+          case "Cylinder" =>
+            Cylinder(radius = param(0).toDouble, colour = colour)
+              .map(
+                _ + Vector3(
+                  param(1).toDouble,
+                  param(2).toDouble,
+                  param(3).toDouble
+                )
+              )
         }
+      }
     }
 
-    //close file
+    // close file
     source.close()
 
-    new Model(shapes, colour, Matrix3.identity(), showAxis,
-      Array(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1)))
+    new Model(
+      shapes,
+      colour,
+      Matrix3.identity(),
+      showAxis,
+      Array(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1)),
+      Vector3.zeroes()
+    )
   }
 
 }
 
 /** Model class which supports rotation and scaling */
-case class Model(shapes: Array[Shape], colour: Colour,
-                 rot: Matrix3[Double], showAxis: Boolean, axis: Array[Vector3[Double]]) extends Shape {
+case class Model(
+                  shapes: Array[Shape],
+                  colour: Colour,
+                  rot: Matrix3[Double],
+                  showAxis: Boolean,
+                  axis: Array[Vector3[Double]],
+                  center: Vector3[Double]
+                ) extends Shape {
 
   override type Self = Model
 
   /** Process user inputs */
   def control(state: State): Model = {
-    var model = Model(shapes, colour, rot, showAxis, axis)
+    var model = Model(shapes, colour, rot, showAxis, axis, center)
 
     // rotate
     var rotator: Matrix3[Double] = Matrix3.identity()
@@ -77,7 +112,14 @@ case class Model(shapes: Array[Shape], colour: Colour,
     if (state.window.keyPressed(GLFW.GLFW_KEY_Z)) {
       rotator *= Matrix3.rotatorZ(Math.toRadians(0.5))
     }
-    model = rotator * Model(model.shapes, model.colour, rotator * model.rot, showAxis, model.axis)
+    model = rotator * Model(
+      model.shapes,
+      model.colour,
+      rotator * model.rot,
+      showAxis,
+      model.axis,
+      model.center
+    )
 
     // scale
     if (state.window.keyPressed(GLFW.GLFW_KEY_C)) {
@@ -108,58 +150,124 @@ case class Model(shapes: Array[Shape], colour: Colour,
       model = model.scaleZ(0.99)
     }
 
+    if (state.window.keyPressed(GLFW.GLFW_KEY_P)) {
+      var in = new Scanner(System.in)
+      val pointPattern =
+        Pattern.compile("-?\\d+\\.\\d+,-?\\d+\\.\\d+,-?\\d+\\.\\d+")
+
+      print("Point[double,double,double]:")
+
+      while (!in.hasNext(pointPattern)) {
+        in.next()
+      }
+      val point = in.next(pointPattern).split(",").map(_.toDouble)
+      model = model.moveTo(Vector3(point(0), point(1), point(2)))
+    }
+
     model
   }
 
   /** Scale in Ox direction */
   def scaleX(scale: Double): Self = {
-    Model(shapes.map {
-      case b@Box(_, _, _, _, _, _) =>
-        rot * Box(scale * b.width() / 2, b.height() / 2, b.depth() / 2, colour) + b.center() +
-          (scale - 1) * b.center().project(axis(0))
-      case Text(text) =>
-        rot * Text(text.map(_ * scale))
-      case Cylinder(b, _, _) =>
-        rot * Cylinder(radius = b.radius() * scale, colour = colour)
-      case s: Sphere =>
-        rot * Sphere(s.radius * scale, s.center, colour)
-    }, colour, rot, showAxis, axis)
-
+    Model(
+      shapes.map {
+        case b@Box(_, _, _, _, _, _) =>
+          rot * Box(
+            scale * b.width() / 2,
+            b.height() / 2,
+            b.depth() / 2,
+            colour
+          ) + b.center() +
+            (scale - 1) * b.center().project(axis(0))
+        case Text(text) =>
+          rot * Text(text.map(_ * scale))
+        case Cylinder(b, _, _) =>
+          rot * Cylinder(radius = b.radius() * scale, colour = colour)
+        case s: Sphere =>
+          rot * Sphere(s.radius * scale, s.center, colour)
+      },
+      colour,
+      rot,
+      showAxis,
+      axis,
+      center
+    )
   }
 
   /** Scale in Oy direction */
   def scaleY(scale: Double): Self = {
-    Model(shapes.map {
-      case b@Box(_, _, _, _, _, _) =>
-        rot * Box(b.width() / 2, scale * b.height() / 2, b.depth() / 2, colour) + b.center() +
-          (scale - 1) * b.center().project(axis(1))
-      case Text(text) =>
-        rot * Text(text.map(_ * scale))
-      case Cylinder(b, _, _) =>
-        rot * Cylinder(radius = b.radius() * scale, colour = colour)
-      case s: Sphere =>
-        rot * Sphere(s.radius * scale, s.center, colour)
-    }, colour, rot, showAxis, axis)
-
+    Model(
+      shapes.map {
+        case b@Box(_, _, _, _, _, _) =>
+          rot * Box(
+            b.width() / 2,
+            scale * b.height() / 2,
+            b.depth() / 2,
+            colour
+          ) + b.center() +
+            (scale - 1) * b.center().project(axis(1))
+        case Text(text) =>
+          rot * Text(text.map(_ * scale))
+        case Cylinder(b, _, _) =>
+          rot * Cylinder(radius = b.radius() * scale, colour = colour)
+        case s: Sphere =>
+          rot * Sphere(s.radius * scale, s.center, colour)
+      },
+      colour,
+      rot,
+      showAxis,
+      axis,
+      center
+    )
   }
 
   /** Scale in Oz direction */
   def scaleZ(scale: Double): Self = {
-    Model(shapes.map {
-      case b@Box(_, _, _, _, _, _) =>
-        rot * Box(b.width() / 2, b.height() / 2, scale * b.depth() / 2, colour) + b.center() +
-          (scale - 1) * b.center().project(axis(2))
-      case Text(text) =>
-        rot * Text(text.map(_ * scale))
-      case Cylinder(b, _, _) =>
-        rot * Cylinder(radius = b.radius() * scale, colour = colour)
-      case s: Sphere =>
-        rot * Sphere(s.radius * scale, s.center, colour)
-    }, colour, rot, showAxis, axis)
+    Model(
+      shapes.map {
+        case b@Box(_, _, _, _, _, _) =>
+          rot * Box(
+            b.width() / 2,
+            b.height() / 2,
+            scale * b.depth() / 2,
+            colour
+          ) + b.center() +
+            (scale - 1) * b.center().project(axis(2))
+        case Text(text) =>
+          rot * Text(text.map(_ * scale))
+        case Cylinder(b, _, _) =>
+          rot * Cylinder(radius = b.radius() * scale, colour = colour)
+        case s: Sphere =>
+          rot * Sphere(s.radius * scale, s.center, colour)
+      },
+      colour,
+      rot,
+      showAxis,
+      axis,
+      center
+    )
+  }
+
+  def moveTo(point: Vector3[Double]): Self = {
+    Model(
+      shapes.map(_.map(_ - center + point)),
+      colour,
+      rot,
+      showAxis,
+      axis,
+      point
+    )
   }
 
   override def map(f: Vector3[Double] => Vector3[Double]): Self =
-    Model(shapes.map(_.map(f)), colour, rot, showAxis, axis.map(f).map(_.normalise()))
+    Model(
+      shapes.map(_.map(f)),
+      colour,
+      rot,
+      showAxis,
+      axis.map(f).map(_.normalise()),
+      f(center)
+    )
 
   override def buildMesh(mesh: Mesh[Point, LineOrRay, Triangle]): Unit = {
     shapes.foreach(_.buildMesh(mesh))

@@ -8,27 +8,32 @@ import slack3d.graphics.light.{Light, LightProjector}
 object Main extends App {
 
   // create window
-  val window = Slack3D("A sphere",
+  val window = Slack3D(
+    "A sphere",
     backgroundColor = Colour.Bisque,
-    light = Some(Light(Colour.White, Vector3(0.0, 5, 0))(LightProjector.PhongLightProjector)),
+    light = Some(
+      Light(Colour.White, Vector3(0.0, 5, 0))(
+        LightProjector.PhongLightProjector
+      )
+    ),
     camera = Some(new Camera(speed = 0, sensitivity = 0) {
       override def mouseMoved(xPos: Double, yPos: Double): Unit = {}
-    }))
+    })
+  )
 
   // create model
   var model = Model(colour = Colour.Black, showAxis = true)
 
   // run main loop
-  window foreach {
-    state =>
-      // create new model when r is pressed
-      if (state.window.keyPressed(GLFW.GLFW_KEY_R)) {
-        model = Model(colour = Colour.Black, showAxis = true)
-      }
+  window foreach { state =>
+    // create new model when r is pressed
+    if (state.window.keyPressed(GLFW.GLFW_KEY_R)) {
+      model = Model(colour = Colour.Black, showAxis = true)
+    }
 
-      // manage scaling and rotation
-      model = model.control(state)
+    // manage scaling and rotation
+    model = model.control(state)
 
-      Seq(model)
+    Seq(model)
   }
 }
