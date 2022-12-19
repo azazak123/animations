@@ -26,6 +26,8 @@ version := "1.0"
 
 libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
 
+libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value
+
 libraryDependencies += "com.github.simerplaha" %% "slack3d" % "0.1.0"
 
 libraryDependencies += "org.scalafx" %% "scalafx" % "16.0.0-R24"

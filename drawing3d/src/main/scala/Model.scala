@@ -10,6 +10,8 @@ import java.net.URI
 import java.util.Scanner
 import java.util.regex.Pattern
 import scala.io.Source
+import scala.reflect.runtime.universe._
+import scala.tools.reflect.ToolBox
 
 object Model {
 
@@ -72,13 +74,14 @@ object Model {
     // close file
     source.close()
 
-    new Model(
+    Model(
       shapes,
       colour,
       Matrix3.identity(),
       showAxis,
       Array(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1)),
-      Vector3.zeroes()
+      Vector3.zeroes(),
+      None
     )
   }
 
@@ -91,14 +94,17 @@ case class Model(
                   rot: Matrix3[Double],
                   showAxis: Boolean,
                   axis: Array[Vector3[Double]],
-                  center: Vector3[Double]
+                  center: Vector3[Double],
+                  func: Option[(Double => Double, Double => Double, Double, Double)]
                 ) extends Shape {
 
   override type Self = Model
 
   /** Process user inputs */
   def control(state: State): Model = {
-    var model = Model(shapes, colour, rot, showAxis, axis, center)
+    var model = Model(shapes, colour, rot, showAxis, axis, center, func)
+
+    if (Math.abs(center.y) > 1.2 || Math.abs(center.x) > 1.2) model = model.moveTo(Vector3.zeroes())
 
     // rotate
     var rotator: Matrix3[Double] = Matrix3.identity()
@@ -112,13 +118,15 @@ case class Model(
     if (state.window.keyPressed(GLFW.GLFW_KEY_Z)) {
       rotator *= Matrix3.rotatorZ(Math.toRadians(0.5))
     }
+
     model = rotator * Model(
       model.shapes,
       model.colour,
       rotator * model.rot,
       showAxis,
       model.axis,
-      model.center
+      model.center,
+      func
     )
 
     // scale
@@ -150,12 +158,13 @@ case class Model(
       model = model.scaleZ(0.99)
     }
 
+    // move to specific point
     if (state.window.keyPressed(GLFW.GLFW_KEY_P)) {
-      var in = new Scanner(System.in)
+      val in = new Scanner(System.in)
       val pointPattern =
         Pattern.compile("-?\\d+\\.\\d+,-?\\d+\\.\\d+,-?\\d+\\.\\d+")
 
-      print("Point[double,double,double]:")
+      print("Point[Double,Double,Double]:")
 
       while (!in.hasNext(pointPattern)) {
         in.next()
@@ -164,11 +173,76 @@ case class Model(
       model = model.moveTo(Vector3(point(0), point(1), point(2)))
     }
 
+    // move along the specific trajectory
+    if (state.window.keyPressed(GLFW.GLFW_KEY_O)) {
+      val in = new Scanner(System.in)
+      val toolbox = runtimeMirror(getClass.getClassLoader).mkToolBox()
+
+      val funcPattern =
+        Pattern.compile("y\\(x\\)=.+,z\\(x\\)=.+,-?\\d+\\.\\d+,\\d+\\.\\d+")
+      print("Functions, start x, speed [y(x)=[func],z(x)=[func],Double,Double]:")
+
+      while (!in.hasNext(funcPattern)) {
+        in.next()
+      }
+
+      val args = in.next(funcPattern).split(",")
+
+      val yfStr = "object FunctionWrapper { def apply(x: Double): Double = {" + args(0).split("=")(1) + "}}"
+      val zfStr = "object FunctionWrapper { def apply(x: Double): Double = {" + args(1).split("=")(1) + "}}"
+
+
+      val yfS =
+        toolbox.define(toolbox.parse(yfStr).asInstanceOf[toolbox.u.ImplDef])
+      val yf = toolbox.eval(q"$yfS.apply _").asInstanceOf[Double => Double]
+
+      val zfS =
+        toolbox.define(toolbox.parse(zfStr).asInstanceOf[toolbox.u.ImplDef])
+      val zf = toolbox.eval(q"$zfS.apply _").asInstanceOf[Double => Double]
+
+      model = Model(
+        model.shapes,
+        model.colour,
+        model.rot,
+        showAxis,
+        model.axis,
+        model.center,
+        Some(yf, zf, args(2).toDouble, args(3).toDouble)
+      )
+    }
+
+    model.func match {
+      case Some((f, g, x, speed)) =>
+        model = model.moveTo(Vector3(x, f(x), g(x)))
+
+        if (Math.abs(f(x)) > 1.2 || Math.abs(x) > 1.2)
+          model = Model(
+            model.shapes,
+            model.colour,
+            model.rot,
+            showAxis,
+            model.axis,
+            model.center,
+            None
+          )
+        else model = Model(
+          model.shapes,
+          model.colour,
+          model.rot,
+          showAxis,
+          model.axis,
+          model.center,
+          Some(f, g, x + speed, speed)
+        )
+
+      case None =>
+    }
+
     model
   }
 
   /** Scale in Ox direction */
-  def scaleX(scale: Double): Self = {
+  private def scaleX(scale: Double): Self = {
     Model(
       shapes.map {
         case b@Box(_, _, _, _, _, _) =>
@@ -178,7 +252,7 @@ case class Model(
             b.depth() / 2,
             colour
           ) + b.center() +
-            (scale - 1) * b.center().project(axis(0))
+            (scale - 1) * b.center().-(center).project(axis(0) - center)
         case Text(text) =>
           rot * Text(text.map(_ * scale))
         case Cylinder(b, _, _) =>
@@ -190,12 +264,13 @@ case class Model(
       rot,
       showAxis,
       axis,
-      center
+      center,
+      func
     )
   }
 
   /** Scale in Oy direction */
-  def scaleY(scale: Double): Self = {
+  private def scaleY(scale: Double): Self = {
     Model(
       shapes.map {
         case b@Box(_, _, _, _, _, _) =>
@@ -205,7 +280,7 @@ case class Model(
             b.depth() / 2,
             colour
           ) + b.center() +
-            (scale - 1) * b.center().project(axis(1))
+            (scale - 1) * b.center().-(center).project(axis(1) - center)
         case Text(text) =>
           rot * Text(text.map(_ * scale))
         case Cylinder(b, _, _) =>
@@ -217,12 +292,13 @@ case class Model(
       rot,
       showAxis,
       axis,
-      center
+      center,
+      func
     )
   }
 
   /** Scale in Oz direction */
-  def scaleZ(scale: Double): Self = {
+  private def scaleZ(scale: Double): Self = {
     Model(
       shapes.map {
         case b@Box(_, _, _, _, _, _) =>
@@ -232,7 +308,7 @@ case class Model(
             scale * b.depth() / 2,
             colour
           ) + b.center() +
-            (scale - 1) * b.center().project(axis(2))
+            (scale - 1) * b.center().-(center).project(axis(2) - center)
         case Text(text) =>
           rot * Text(text.map(_ * scale))
         case Cylinder(b, _, _) =>
@@ -244,18 +320,21 @@ case class Model(
       rot,
       showAxis,
       axis,
-      center
+      center,
+      func
     )
   }
 
-  def moveTo(point: Vector3[Double]): Self = {
+  /** Move to a specific point */
+  private def moveTo(point: Vector3[Double]): Self = {
     Model(
       shapes.map(_.map(_ - center + point)),
       colour,
       rot,
       showAxis,
-      axis,
-      point
+      axis.map(_ - center + point).map(_ - point).map(_.normalise() + point),
+      point,
+      func
     )
   }
 
@@ -265,16 +344,17 @@ case class Model(
       colour,
       rot,
       showAxis,
-      axis.map(f).map(_.normalise()),
-      f(center)
+      axis.map(f).map(_ - f(center)).map(_.normalise() + f(center)),
+      f(center),
+      func
     )
 
   override def buildMesh(mesh: Mesh[Point, LineOrRay, Triangle]): Unit = {
     shapes.foreach(_.buildMesh(mesh))
     if (showAxis) {
-      Line(axis(0), Colour.Red).buildMesh(mesh)
-      Line(axis(1), Colour.Blue).buildMesh(mesh)
-      Line(axis(2), Colour.Green).buildMesh(mesh)
+      Line(center, axis(0), Colour.Red).buildMesh(mesh)
+      Line(center, axis(1), Colour.Blue).buildMesh(mesh)
+      Line(center, axis(2), Colour.Green).buildMesh(mesh)
       Line(Vector3(1.0, 0, 0), Colour.Red).buildMesh(mesh)
       Line(Vector3(0, 1.0, 0), Colour.Blue).buildMesh(mesh)
       Line(Vector3(0, 0, 1.0), Colour.Green).buildMesh(mesh)

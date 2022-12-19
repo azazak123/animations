@@ -9,7 +9,9 @@ object Main extends App {
 
   // create window
   val window = Slack3D(
-    "A sphere",
+    "App",
+    width = 1600,
+    height = 1000,
     backgroundColor = Colour.Bisque,
     light = Some(
       Light(Colour.White, Vector3(0.0, 5, 0))(
@@ -30,7 +32,7 @@ object Main extends App {
     if (state.window.keyPressed(GLFW.GLFW_KEY_R)) {
       model = Model(colour = Colour.Black, showAxis = true)
     }
-
+    state.camera.get.up
     // manage scaling and rotation
     model = model.control(state)
 
