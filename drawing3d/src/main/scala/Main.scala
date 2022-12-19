@@ -10,8 +10,8 @@ object Main extends App {
   // create window
   val window = Slack3D(
     "App",
-    width = 1600,
-    height = 1000,
+    width = 960,
+    height = 540,
     backgroundColor = Colour.Bisque,
     light = Some(
       Light(Colour.White, Vector3(0.0, 5, 0))(
